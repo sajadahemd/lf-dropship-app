@@ -100,11 +100,6 @@ async function getAccountInfo(accessToken) {
  */
 async function importProduct(accessToken, rmProduct) {
   const productId = rmProduct.item_id || rmProduct._id || rmProduct.id;
-  const slug = (rmProduct.name || rmProduct.title || `product-${productId}`)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u0600-\u06ff]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .substring(0, 60) || `rm-product-${productId}`;
 
   const mutation = `
     mutation CreateProduct($node: InputProduct!) {
@@ -125,8 +120,10 @@ async function importProduct(accessToken, rmProduct) {
     description: rmProduct.description || '',
     price,
     sku: `RM:${productId}`,
-    slug: `${slug}-${Date.now()}`,
     product_type: 'physical_product',
+    options: [],
+    variants: [],
+    images: [],
   };
 
   if (comparePrice && comparePrice > price) {
