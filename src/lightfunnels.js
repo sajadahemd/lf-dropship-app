@@ -83,32 +83,44 @@ async function getAccountInfo(accessToken) {
 }
 
 /**
- * Upload a single image URL to LF media storage.
- * Returns the media ID on success, or null if upload is unsupported / fails.
+ * Upload a single image URL to LF and return its integer ID.
+ * LF's InputProduct.images is [Int], so we need numeric image IDs.
+ *
+ * Tries a few likely mutation names since LF's exact schema varies by plan:
+ *   - createImage(node: InputImage)
+ *   - createMedia(node: InputMedia)
+ *   - createFile(node: InputFile)
+ * Returns null if none succeed.
  */
 async function uploadImageToLF(accessToken, imageUrl) {
-  const mutation = `
-    mutation CreateMedia($node: InputMedia!) {
-      createMedia(node: $node) {
-        id
-        src
+  const attempts = [
+    { name: 'createImage', input: 'InputImage' },
+    { name: 'createMedia', input: 'InputMedia' },
+    { name: 'createFile',  input: 'InputFile'  },
+  ];
+
+  for (const attempt of attempts) {
+    const query = `
+      mutation Upload($node: ${attempt.input}!) {
+        ${attempt.name}(node: $node) {
+          _id
+        }
       }
+    `;
+    try {
+      const data = await graphql(accessToken, query, { node: { src: imageUrl } });
+      const id = data?.[attempt.name]?._id;
+      if (id != null) {
+        console.log(`[LF] Uploaded image via ${attempt.name}, id:`, id);
+        return parseInt(id, 10);
+      }
+    } catch (err) {
+      // Try the next mutation
     }
-  `;
-  try {
-    const data = await graphql(accessToken, mutation, {
-      node: { src: imageUrl },
-    });
-    const id = data?.createMedia?.id;
-    if (id) {
-      console.log('[LF] Uploaded image, media id:', id);
-      return id;
-    }
-    return null;
-  } catch (err) {
-    console.warn('[LF] Media upload failed for', imageUrl, '—', err.message);
-    return null;
   }
+
+  console.warn('[LF] All image upload mutations failed for:', imageUrl);
+  return null;
 }
 
 /**
@@ -133,22 +145,15 @@ async function importProduct(accessToken, rmProduct) {
     ? [rmProduct.img]
     : [];
 
-  // Upload images to LF; fall back to direct src if upload not supported
+  // Upload each image to LF first; images field requires [Int] (image IDs).
+  // If all uploads fail, create the product without images rather than failing.
   let images = [];
   if (rawImageUrls.length > 0) {
     const uploadResults = await Promise.all(
       rawImageUrls.slice(0, 5).map(url => uploadImageToLF(accessToken, url))
     );
-    const uploadedIds = uploadResults.filter(Boolean);
-
-    if (uploadedIds.length > 0) {
-      images = uploadedIds.map(id => ({ id }));
-      console.log(`[LF] Attaching ${uploadedIds.length} uploaded images`);
-    } else {
-      // Fallback: pass URLs directly
-      images = rawImageUrls.slice(0, 5).map(url => ({ src: url }));
-      console.log(`[LF] Falling back to ${images.length} direct-URL images`);
-    }
+    images = uploadResults.filter(id => Number.isInteger(id));
+    console.log(`[LF] Attaching ${images.length}/${rawImageUrls.length} uploaded image IDs`);
   }
 
   const mutation = `
