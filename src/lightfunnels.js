@@ -3,9 +3,6 @@ const axios = require('axios');
 const LF_API_URL = 'https://api.lightfunnels.com/graphql';
 const LF_TOKEN_URL = 'https://api.lightfunnels.com/api/access_token';
 
-/**
- * Exchange the OAuth2 authorization code for an access token.
- */
 async function getAccessToken(code) {
   const clientId = process.env.LF_CLIENT_ID;
   const clientSecret = process.env.LF_CLIENT_SECRET;
@@ -37,9 +34,6 @@ async function getAccessToken(code) {
   }
 }
 
-/**
- * Run a GraphQL query/mutation against the Lightfunnels API.
- */
 async function graphql(accessToken, query, variables = {}) {
   const response = await axios.post(
     LF_API_URL,
@@ -57,9 +51,6 @@ async function graphql(accessToken, query, variables = {}) {
   return response.data.data;
 }
 
-/**
- * Register the order/confirmed webhook for this account.
- */
 async function registerWebhook(accessToken, appUrl, accountId) {
   const mutation = `
     mutation CreateWebhookMutation($node: WebhookInput!) {
@@ -79,9 +70,6 @@ async function registerWebhook(accessToken, appUrl, accountId) {
   return graphql(accessToken, mutation, variables);
 }
 
-/**
- * Fetch basic account info (to get the account ID).
- */
 async function getAccountInfo(accessToken) {
   const query = `
     query {
@@ -95,11 +83,73 @@ async function getAccountInfo(accessToken) {
 }
 
 /**
+ * Upload a single image URL to LF media storage.
+ * Returns the media ID on success, or null if upload is unsupported / fails.
+ */
+async function uploadImageToLF(accessToken, imageUrl) {
+  const mutation = `
+    mutation CreateMedia($node: InputMedia!) {
+      createMedia(node: $node) {
+        id
+        src
+      }
+    }
+  `;
+  try {
+    const data = await graphql(accessToken, mutation, {
+      node: { src: imageUrl },
+    });
+    const id = data?.createMedia?.id;
+    if (id) {
+      console.log('[LF] Uploaded image, media id:', id);
+      return id;
+    }
+    return null;
+  } catch (err) {
+    console.warn('[LF] Media upload failed for', imageUrl, '—', err.message);
+    return null;
+  }
+}
+
+/**
  * Import a Rolemall product into a Lightfunnels store.
- * rmProduct shape: { name, description, price, images: [{url}], id, strung }
+ *
+ * Image strategy:
+ *   1. Try to upload each Rolemall image URL to LF media storage (createMedia).
+ *   2. If that succeeds, attach by media ID.
+ *   3. If createMedia is not supported or errors, fall back to passing {src} URLs
+ *      directly in the images array (LF accepts this on some plan tiers).
+ *   4. Either way, the product is created — images may be absent in the worst case.
  */
 async function importProduct(accessToken, rmProduct) {
   const productId = rmProduct.item_id || rmProduct._id || rmProduct.id;
+
+  const price = parseFloat(rmProduct.price) || 0;
+  const comparePrice = parseFloat(rmProduct.compare_price || rmProduct.original_price || 0) || null;
+
+  const rawImageUrls = Array.isArray(rmProduct.img)
+    ? rmProduct.img
+    : rmProduct.img
+    ? [rmProduct.img]
+    : [];
+
+  // Upload images to LF; fall back to direct src if upload not supported
+  let images = [];
+  if (rawImageUrls.length > 0) {
+    const uploadResults = await Promise.all(
+      rawImageUrls.slice(0, 5).map(url => uploadImageToLF(accessToken, url))
+    );
+    const uploadedIds = uploadResults.filter(Boolean);
+
+    if (uploadedIds.length > 0) {
+      images = uploadedIds.map(id => ({ id }));
+      console.log(`[LF] Attaching ${uploadedIds.length} uploaded images`);
+    } else {
+      // Fallback: pass URLs directly
+      images = rawImageUrls.slice(0, 5).map(url => ({ src: url }));
+      console.log(`[LF] Falling back to ${images.length} direct-URL images`);
+    }
+  }
 
   const mutation = `
     mutation CreateProduct($node: InputProduct!) {
@@ -108,15 +158,13 @@ async function importProduct(accessToken, rmProduct) {
         _id
         title
         price
+        images {
+          id
+          src
+        }
       }
     }
   `;
-
-  const price = parseFloat(rmProduct.price) || 0;
-  const comparePrice = parseFloat(rmProduct.compare_price || rmProduct.original_price || 0) || null;
-
-  // Build images array from Rolemall img URLs (LF expects image IDs or URLs)
-  const imageUrls = Array.isArray(rmProduct.img) ? rmProduct.img : [];
 
   const node = {
     title: rmProduct.name || rmProduct.title || 'Imported Product',
@@ -126,7 +174,7 @@ async function importProduct(accessToken, rmProduct) {
     product_type: 'physical_product',
     options: [],
     variants: [],
-    images: [], // Images need to be uploaded separately to LF first
+    images,
   };
 
   if (comparePrice && comparePrice > price) {

@@ -1,7 +1,7 @@
 const axios = require('axios');
 
-const ROLEMALL_API_URL = 'https://rolemall.com/api/add-simple-order-no-limit';
 const ROLEMALL_BASE = 'https://rolemall.com/api';
+const ROLEMALL_ORDER_URL = `${ROLEMALL_BASE}/add-simple-order-no-limit`;
 
 function getToken() {
   const token = process.env.ROLEMALL_TOKEN;
@@ -41,24 +41,62 @@ async function fetchProductDetails({ strung = null, product_id = null } = {}) {
 }
 
 /**
- * Map a Lightfunnels order/confirmed webhook payload to a Rolemall order request.
- *
- * Field mapping:
- *   cus_name   -> customer full name
- *   cus_num1   -> customer phone (billing or shipping)
- *   capetel    -> same phone (secondary contact field)
- *   city       -> shipping city
- *   address    -> shipping address line1
- *   item_id    -> extracted from variant SKU or product numeric ID (see note below)
- *   all_price  -> order total (integer)
- *   count      -> quantity of first item (multi-item: sum of quantities)
- *   note       -> order name + LF order ID
- *   ip         -> client IP
- *
- * NOTE: Rolemall's item_id must match the product ID in your Rolemall catalog.
- * Store it in the product's SKU field on Lightfunnels, e.g. "RM:12345".
- * The app will parse "RM:<id>" from the SKU; if absent it falls back to 0.
+ * Fetch status for a single Rolemall order.
+ * Rolemall exposes order status at GET /api/order-status?token=&order_id=
+ * Returns null if the endpoint is unavailable or the order is not found.
  */
+async function fetchOrderStatus(rolemallOrderId) {
+  const token = getToken();
+  try {
+    const response = await axios.get(`${ROLEMALL_BASE}/order-status`, {
+      params: { token, order_id: rolemallOrderId },
+    });
+    return response.data;
+  } catch (err) {
+    const detail = err.response
+      ? `${err.response.status}: ${JSON.stringify(err.response.data)}`
+      : err.message;
+    console.warn('[Rolemall] fetchOrderStatus failed for', rolemallOrderId, '—', detail);
+    return null;
+  }
+}
+
+/**
+ * Fetch the merchant's recent orders from Rolemall.
+ * Used to bulk-sync fulfillment statuses when a direct order-status endpoint
+ * is not available.
+ */
+async function fetchMyOrders({ page = 1, limit = 100 } = {}) {
+  const token = getToken();
+  try {
+    const response = await axios.get(`${ROLEMALL_BASE}/my-orders`, {
+      params: { token, page, limit },
+    });
+    return response.data;
+  } catch (err) {
+    const detail = err.response
+      ? `${err.response.status}: ${JSON.stringify(err.response.data)}`
+      : err.message;
+    console.warn('[Rolemall] fetchMyOrders failed —', detail);
+    return null;
+  }
+}
+
+/**
+ * Extract the Rolemall order ID from the submit response.
+ * Handles the common response shapes Rolemall returns.
+ */
+function extractRolemallOrderId(responseData) {
+  if (!responseData) return null;
+  return (
+    responseData.order_id ||
+    responseData.id ||
+    responseData.data?.order_id ||
+    responseData.data?.id ||
+    null
+  );
+}
+
 function mapOrderToRolemall(lfOrder) {
   const order = lfOrder.node;
   const shipping = order.shipping_address || order.billing_address || {};
@@ -105,9 +143,6 @@ function mapOrderToRolemall(lfOrder) {
   };
 }
 
-/**
- * Submit an order to Rolemall.
- */
 async function submitOrder(lfOrderPayload) {
   const token = process.env.ROLEMALL_TOKEN;
   if (!token) {
@@ -117,7 +152,7 @@ async function submitOrder(lfOrderPayload) {
   const body = mapOrderToRolemall(lfOrderPayload);
 
   const response = await axios.post(
-    ROLEMALL_API_URL,
+    ROLEMALL_ORDER_URL,
     body,
     {
       params: { token },
@@ -125,7 +160,18 @@ async function submitOrder(lfOrderPayload) {
     }
   );
 
-  return { body, response: response.data };
+  const rolemallOrderId = extractRolemallOrderId(response.data);
+
+  return { body, response: response.data, rolemallOrderId };
 }
 
-module.exports = { submitOrder, mapOrderToRolemall, fetchCategories, fetchProducts, fetchProductDetails, buildStrung };
+module.exports = {
+  submitOrder,
+  mapOrderToRolemall,
+  fetchCategories,
+  fetchProducts,
+  fetchProductDetails,
+  fetchOrderStatus,
+  fetchMyOrders,
+  buildStrung,
+};

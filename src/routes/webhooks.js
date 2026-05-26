@@ -57,6 +57,8 @@ router.post('/order-confirmed/:accountId', async (req, res) => {
     orderRecord.rolemall_status = 'success';
     orderRecord.rolemall_response = result.response;
     orderRecord.rolemall_body = result.body;
+    orderRecord.rolemall_order_id = result.rolemallOrderId || null;
+    orderRecord.fulfillment_status = null;
     console.log(`[Rolemall] Order ${orderId} submitted successfully`, result.response);
   } catch (err) {
     orderRecord.rolemall_status = 'failed';

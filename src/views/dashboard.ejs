@@ -50,17 +50,26 @@
     .btn-outline:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
     .btn-sm { padding: 0.35rem 0.8rem; font-size: 0.78rem; }
     .btn-success { background: var(--success); color: #0f1117; }
+    .btn-teal { background: var(--accent2); color: #0f1117; }
 
     /* PRODUCT GRID */
     .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
-    .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; }
+    .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; position: relative; }
     .product-card:hover { border-color: var(--accent); }
+    .product-card.is-imported { border-color: rgba(69,227,179,0.4); }
     .product-card img { width: 100%; height: 160px; object-fit: cover; background: var(--surface2); display: block; }
     .product-card .no-img { width: 100%; height: 160px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--muted); }
     .product-card .info { padding: 0.75rem; }
     .product-card .name { font-size: 0.82rem; font-weight: 600; margin-bottom: 0.3rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .product-card .price { font-size: 0.9rem; color: var(--accent2); font-weight: 700; margin-bottom: 0.5rem; }
     .product-card .actions { display: flex; gap: 0.4rem; }
+
+    .imported-badge {
+      position: absolute; top: 8px; right: 8px;
+      background: rgba(69,227,179,0.18); border: 1px solid var(--accent2);
+      color: var(--accent2); font-size: 0.65rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 999px; letter-spacing: 0.05em;
+    }
 
     /* TABLE */
     .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem; }
@@ -79,6 +88,15 @@
     .success .dot { background: var(--success); }
     .failed .dot  { background: var(--danger); }
     .pending .dot { background: var(--warning); }
+
+    .fulfillment-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .fulfillment-badge.shipped   { background: rgba(69,227,179,0.12); color: var(--accent2); border-color: var(--accent2); }
+    .fulfillment-badge.delivered { background: rgba(74,222,128,0.15); color: var(--success); border-color: var(--success); }
+    .fulfillment-badge.cancelled { background: rgba(255,95,95,0.12); color: var(--danger); border-color: var(--danger); }
+    .fulfillment-badge.processing { background: rgba(108,99,255,0.12); color: var(--accent); border-color: var(--accent); }
+
+    .orders-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+    .sync-info { font-size: 0.75rem; color: var(--muted); }
 
     .empty-state { text-align: center; padding: 3rem; color: var(--muted); }
     .empty-state p { margin-top: 0.4rem; font-size: 0.82rem; }
@@ -126,13 +144,28 @@
     <div class="stat-card green"><div class="label">Forwarded</div><div class="value"><%= stats.forwarded %></div></div>
     <div class="stat-card red"><div class="label">Failed</div><div class="value"><%= stats.failed %></div></div>
   </div>
+
+  <div class="orders-toolbar">
+    <span class="sync-info" id="sync-info">Sync to fetch latest fulfillment statuses from Rolemall.</span>
+    <button class="btn btn-teal btn-sm" id="sync-btn" onclick="syncOrders()">⟳ Sync Order Status</button>
+  </div>
+
   <div class="table-wrap">
     <% if (orders.length === 0) { %>
       <div class="empty-state">🛒 No orders yet.<p>Orders placed in your LF stores will auto-forward to Rolemall and appear here.</p></div>
     <% } else { %>
     <table>
       <thead>
-        <tr><th>LF Order</th><th>Customer</th><th>Total</th><th>Rolemall</th><th>Details</th><th>Date</th></tr>
+        <tr>
+          <th>LF Order</th>
+          <th>Customer</th>
+          <th>Total</th>
+          <th>Rolemall ID</th>
+          <th>Submit</th>
+          <th>Fulfillment</th>
+          <th>Details</th>
+          <th>Date</th>
+        </tr>
       </thead>
       <tbody>
         <% orders.forEach(o => { %>
@@ -140,12 +173,22 @@
           <td><strong>#<%= o.lf_order_name || o.lf_order_id %></strong></td>
           <td><%= o.customer || '—' %></td>
           <td><%= o.total != null ? o.total : '—' %></td>
+          <td style="color:var(--muted);font-size:0.75rem;"><%= o.rolemall_order_id || '—' %></td>
           <td><span class="badge-status <%= o.rolemall_status %>"><span class="dot"></span><%= o.rolemall_status %></span></td>
-          <td style="font-size:0.72rem; color:var(--muted); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          <td>
+            <% if (o.fulfillment_status) { %>
+              <span class="fulfillment-badge <%= o.fulfillment_status.toLowerCase() %>"><%= o.fulfillment_status %></span>
+            <% } else if (o.rolemall_status === 'success') { %>
+              <span style="color:var(--muted);font-size:0.72rem;">not synced</span>
+            <% } else { %>
+              <span style="color:var(--muted);font-size:0.72rem;">—</span>
+            <% } %>
+          </td>
+          <td style="font-size:0.72rem; color:var(--muted); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
             <% if (o.rolemall_status === 'success' && o.rolemall_response) { %>
-              <span style="color:var(--success)"><%= JSON.stringify(o.rolemall_response).slice(0,70) %></span>
+              <span style="color:var(--success)"><%= JSON.stringify(o.rolemall_response).slice(0,60) %></span>
             <% } else if (o.error) { %>
-              <span style="color:var(--danger)" title="<%= o.error %>"><%= o.error.slice(0,70) %></span>
+              <span style="color:var(--danger)" title="<%= o.error %>"><%= o.error.slice(0,60) %></span>
             <% } else { %>—<% } %>
           </td>
           <td style="color:var(--muted);font-size:0.72rem;"><%= new Date(o.received_at).toLocaleString() %></td>
@@ -188,6 +231,7 @@
 <script>
   let currentPage = 1;
   let categories = [];
+  let importedProducts = {};  // rolemallId -> { lfId, title, importedAt }
   const accountId = new URLSearchParams(window.location.search).get('account_id') || '';
 
   function switchTab(name) {
@@ -201,6 +245,14 @@
     t.textContent = msg;
     t.className = 'toast show ' + type;
     setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  async function loadImportedProducts() {
+    try {
+      const res = await fetch('/api/imported-products');
+      const json = await res.json();
+      if (json.ok) importedProducts = json.data || {};
+    } catch(e) { console.warn('Could not load imported products', e); }
   }
 
   async function loadCategories() {
@@ -259,14 +311,16 @@
   }
 
   function renderProductCard(p) {
-    const id = p._id || p.id || p.ID || p.product_id;
+    const id = String(p._id || p.id || p.ID || p.product_id || '');
     const name = p.name || p.title || p.product_name || 'Unnamed';
     const price = p.price ? p.price.toLocaleString() + ' IQD' : '—';
     const img = (Array.isArray(p.img) ? p.img[0] : p.img) || p.image || p.thumbnail || (p.images && p.images[0]);
+    const alreadyImported = id && !!importedProducts[id];
 
     const card = document.createElement('div');
-    card.className = 'product-card';
+    card.className = 'product-card' + (alreadyImported ? ' is-imported' : '');
     card.innerHTML = `
+      ${alreadyImported ? '<span class="imported-badge">✓ In LF</span>' : ''}
       ${img ? `<img src="${img}" alt="${name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
                <div class="no-img" style="display:none">🖼️</div>`
              : `<div class="no-img">🖼️</div>`}
@@ -274,8 +328,10 @@
         <div class="name" title="${name}">${name}</div>
         <div class="price">${price} ${p.currency || ''}</div>
         <div class="actions">
-          <button class="btn btn-sm btn-success" onclick="importProduct(${JSON.stringify(id)})">
-            ＋ Import to LF
+          <button class="btn btn-sm ${alreadyImported ? 'btn-outline' : 'btn-success'}"
+                  onclick="importProduct(${JSON.stringify(id)})"
+                  ${alreadyImported ? 'title="Already imported — click to re-import"' : ''}>
+            ${alreadyImported ? '↻ Re-import' : '＋ Import to LF'}
           </button>
           <button class="btn btn-sm btn-outline" onclick="viewProduct(${JSON.stringify(id)}, ${JSON.stringify(p.strung || null)})">
             Details
@@ -303,7 +359,10 @@
       });
       const json = await res.json();
       if (json.ok) {
+        importedProducts[String(productId)] = { lfId: json.data?.id, title: json.data?.title };
         showToast(`✅ "${json.data?.title}" imported to LF!`, 'success');
+        // Refresh card to show badge without full reload
+        loadProducts(currentPage);
       } else {
         showToast('❌ ' + json.error, 'error');
       }
@@ -327,12 +386,38 @@
     } catch(e) { showToast('❌ ' + e.message, 'error'); }
   }
 
+  async function syncOrders() {
+    const btn = document.getElementById('sync-btn');
+    const info = document.getElementById('sync-info');
+    btn.disabled = true;
+    btn.textContent = '⟳ Syncing…';
+    try {
+      const res = await fetch('/api/sync-orders', { method: 'POST' });
+      const json = await res.json();
+      if (json.ok) {
+        const msg = `Checked ${json.checked} orders, updated ${json.updated}. Reload to see changes.`;
+        info.textContent = msg;
+        showToast(`✅ ${msg}`, 'success');
+      } else {
+        showToast('❌ Sync failed: ' + json.error, 'error');
+        info.textContent = 'Sync failed — check logs.';
+      }
+    } catch(e) {
+      showToast('❌ ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⟳ Sync Order Status';
+    }
+  }
+
   document.getElementById('search-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') loadProducts(1);
   });
 
-  loadCategories();
-  loadProducts(1);
+  loadImportedProducts().then(() => {
+    loadCategories();
+    loadProducts(1);
+  });
 </script>
 </body>
 </html>
