@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const LF_API_URL = 'https://api.lightfunnels.com/api/graphql';
+const LF_API_URL = 'https://api.lightfunnels.com/graphql';
 const LF_TOKEN_URL = 'https://api.lightfunnels.com/api/access_token';
 
 /**
