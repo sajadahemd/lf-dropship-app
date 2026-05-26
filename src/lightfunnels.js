@@ -115,15 +115,18 @@ async function importProduct(accessToken, rmProduct) {
   const price = parseFloat(rmProduct.price) || 0;
   const comparePrice = parseFloat(rmProduct.compare_price || rmProduct.original_price || 0) || null;
 
+  // Build images array from Rolemall img URLs (LF expects image IDs or URLs)
+  const imageUrls = Array.isArray(rmProduct.img) ? rmProduct.img : [];
+
   const node = {
     title: rmProduct.name || rmProduct.title || 'Imported Product',
-    description: rmProduct.description || '',
+    description: rmProduct.body || rmProduct.description || '',
     price,
     sku: `RM:${productId}`,
     product_type: 'physical_product',
     options: [],
     variants: [],
-    images: [],
+    images: [], // Images need to be uploaded separately to LF first
   };
 
   if (comparePrice && comparePrice > price) {
