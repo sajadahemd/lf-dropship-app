@@ -188,6 +188,7 @@
 <script>
   let currentPage = 1;
   let categories = [];
+  const accountId = new URLSearchParams(window.location.search).get('account_id') || '';
 
   function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['products','orders','overview'][i] === name));
@@ -298,7 +299,7 @@
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product_id: String(productId) })
+        body: JSON.stringify({ product_id: String(productId), account_id: accountId })
       });
       const json = await res.json();
       if (json.ok) {

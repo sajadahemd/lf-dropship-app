@@ -5,7 +5,7 @@ const { importProduct } = require('../lightfunnels');
 const store = require('../store');
 
 function getAccountToken(req) {
-  const accountId = req.session.accountId;
+  const accountId = req.session.accountId || req.body.account_id || req.query.account_id;
   if (!accountId) return null;
   const account = store.getAccount(accountId);
   return account ? account.access_token : null;
