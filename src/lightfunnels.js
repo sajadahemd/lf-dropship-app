@@ -82,44 +82,113 @@ async function getAccountInfo(accessToken) {
   return graphql(accessToken, query);
 }
 
+// One-time schema introspection cache
+let _schemaCache = null;
+
+async function introspectImageMutations(accessToken) {
+  if (_schemaCache) return _schemaCache;
+
+  const query = `
+    query {
+      __schema {
+        mutationType {
+          fields {
+            name
+            args { name type { name kind ofType { name kind } } }
+          }
+        }
+        types {
+          name
+          kind
+          inputFields { name type { name kind ofType { name kind } } }
+        }
+      }
+    }
+  `;
+
+  try {
+    const data = await graphql(accessToken, query);
+    const mutations = data.__schema.mutationType.fields;
+    const types = data.__schema.types;
+
+    const imageMutations = mutations.filter(m =>
+      /image|media|file|upload|asset/i.test(m.name)
+    );
+    const imageInputs = types.filter(t =>
+      t.kind === 'INPUT_OBJECT' && /image|media|file|upload|asset/i.test(t.name)
+    );
+
+    console.log('[LF Schema] Candidate image mutations:',
+      imageMutations.map(m => ({
+        name: m.name,
+        args: m.args.map(a => `${a.name}: ${a.type.name || a.type.ofType?.name || a.type.kind}`)
+      }))
+    );
+    console.log('[LF Schema] Candidate image input types:',
+      imageInputs.map(t => ({
+        name: t.name,
+        fields: t.inputFields?.map(f => `${f.name}: ${f.type.name || f.type.ofType?.name || f.type.kind}`)
+      }))
+    );
+
+    _schemaCache = { mutations: imageMutations, inputs: imageInputs };
+    return _schemaCache;
+  } catch (err) {
+    console.warn('[LF Schema] Introspection failed:', err.message);
+    return null;
+  }
+}
+
 /**
  * Upload a single image URL to LF and return its integer ID.
- * LF's InputProduct.images is [Int], so we need numeric image IDs.
- *
- * Tries a few likely mutation names since LF's exact schema varies by plan:
- *   - createImage(node: InputImage)
- *   - createMedia(node: InputMedia)
- *   - createFile(node: InputFile)
- * Returns null if none succeed.
+ * Uses introspection on first call to discover the correct mutation name
+ * and input field, then reuses that for subsequent calls.
  */
 async function uploadImageToLF(accessToken, imageUrl) {
-  const attempts = [
-    { name: 'createImage', input: 'InputImage' },
-    { name: 'createMedia', input: 'InputMedia' },
-    { name: 'createFile',  input: 'InputFile'  },
-  ];
+  // Discover the schema once
+  const schema = await introspectImageMutations(accessToken);
 
-  for (const attempt of attempts) {
+  if (!schema || schema.mutations.length === 0) {
+    console.warn('[LF] No image mutations found via introspection for:', imageUrl);
+    return null;
+  }
+
+  // Try each discovered mutation with its actual input type & field name
+  for (const m of schema.mutations) {
+    const arg = m.args[0];
+    if (!arg) continue;
+    const inputTypeName = arg.type.name || arg.type.ofType?.name;
+    if (!inputTypeName) continue;
+
+    const inputDef = schema.inputs.find(i => i.name === inputTypeName);
+    // Pick the first field that looks like it accepts a URL
+    const urlField = inputDef?.inputFields?.find(f =>
+      /src|url|source|link|href/i.test(f.name)
+    );
+    const fieldName = urlField?.name || 'src';
+
     const query = `
-      mutation Upload($node: ${attempt.input}!) {
-        ${attempt.name}(node: $node) {
+      mutation Upload($node: ${inputTypeName}!) {
+        ${m.name}(${arg.name}: $node) {
           _id
         }
       }
     `;
+
     try {
-      const data = await graphql(accessToken, query, { node: { src: imageUrl } });
-      const id = data?.[attempt.name]?._id;
+      const data = await graphql(accessToken, query, {
+        node: { [fieldName]: imageUrl },
+      });
+      const id = data?.[m.name]?._id;
       if (id != null) {
-        console.log(`[LF] Uploaded image via ${attempt.name}, id:`, id);
+        console.log(`[LF] Uploaded image via ${m.name}({${fieldName}}), id:`, id);
         return parseInt(id, 10);
       }
     } catch (err) {
-      // Try the next mutation
+      console.warn(`[LF] ${m.name} failed:`, err.message.slice(0, 200));
     }
   }
 
-  console.warn('[LF] All image upload mutations failed for:', imageUrl);
   return null;
 }
 
