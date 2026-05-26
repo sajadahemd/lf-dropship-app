@@ -1,0 +1,20 @@
+{
+  "name": "lf-dropship-app",
+  "version": "1.0.0",
+  "description": "Lightfunnels app that auto-forwards confirmed orders to Rolemall dropshipping API",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LF Dropship — Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #232636;
+      --border: #2e3148; --accent: #6c63ff; --accent2: #45e3b3;
+      --danger: #ff5f5f; --warning: #ffb347; --success: #4ade80;
+      --text: #e2e8f0; --muted: #8892b0;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.85rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+    .logo .badge { background: var(--accent); color: #fff; font-size: 0.6rem; padding: 2px 7px; border-radius: 999px; font-weight: 600; letter-spacing: 0.05em; }
+
+    /* TABS */
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 1.5rem; }
+    .tab-btn { background: none; border: none; color: var(--muted); font-size: 0.875rem; font-weight: 600; padding: 0.85rem 1.2rem; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+    .tab-panel.active { display: block; }
+
+    /* STATS */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.2rem; }
+    .stat-card .label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+    .stat-card .value { font-size: 1.8rem; font-weight: 700; }
+    .stat-card.green .value { color: var(--success); }
+    .stat-card.red .value { color: var(--danger); }
+    .stat-card.purple .value { color: var(--accent); }
+    .stat-card.teal .value { color: var(--accent2); }
+
+    /* SEARCH BAR */
+    .search-bar { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .search-bar input, .search-bar select {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      padding: 0.55rem 0.9rem; border-radius: 8px; font-size: 0.875rem; outline: none;
+    }
+    .search-bar input { flex: 1; min-width: 180px; }
+    .search-bar input:focus, .search-bar select:focus { border-color: var(--accent); }
+    .btn { background: var(--accent); color: #fff; border: none; padding: 0.55rem 1.1rem; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
+    .btn-sm { padding: 0.35rem 0.8rem; font-size: 0.78rem; }
+    .btn-success { background: var(--success); color: #0f1117; }
+
+    /* PRODUCT GRID */
+    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; }
+    .product-card:hover { border-color: var(--accent); }
+    .product-card img { width: 100%; height: 160px; object-fit: cover; background: var(--surface2); display: block; }
+    .product-card .no-img { width: 100%; height: 160px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--muted); }
+    .product-card .info { padding: 0.75rem; }
+    .product-card .name { font-size: 0.82rem; font-weight: 600; margin-bottom: 0.3rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .product-card .price { font-size: 0.9rem; color: var(--accent2); font-weight: 700; margin-bottom: 0.5rem; }
+    .product-card .actions { display: flex; gap: 0.4rem; }
+
+    /* TABLE */
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    thead { background: var(--surface2); }
+    th { padding: 0.65rem 0.9rem; text-align: left; color: var(--muted); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
+    td { padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(108,99,255,0.04); }
+
+    .badge-status { display: inline-flex; align-items: center; gap: 0.3rem; padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-status.success { background: rgba(74,222,128,0.15); color: var(--success); }
+    .badge-status.failed  { background: rgba(255,95,95,0.15); color: var(--danger); }
+    .badge-status.pending { background: rgba(255,179,71,0.15); color: var(--warning); }
+    .dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+    .success .dot { background: var(--success); }
+    .failed .dot  { background: var(--danger); }
+    .pending .dot { background: var(--warning); }
+
+    .empty-state { text-align: center; padding: 3rem; color: var(--muted); }
+    .empty-state p { margin-top: 0.4rem; font-size: 0.82rem; }
+
+    .pagination { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; }
+    .page-info { color: var(--muted); font-size: 0.82rem; }
+
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1.2rem; font-size: 0.85rem; color: var(--text); z-index: 9999; transform: translateY(100px); opacity: 0; transition: all 0.3s; max-width: 320px; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-color: var(--success); color: var(--success); }
+    .toast.error   { border-color: var(--danger);  color: var(--danger);  }
+
+    #loading { display: none; text-align: center; padding: 3rem; color: var(--muted); }
+    @media (max-width: 600px) { .tab-panel { padding: 1rem; } table { font-size: 0.75rem; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🔗 LF Dropship Bridge <span class="badge">LIVE</span></div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('products')">📦 Products</button>
+  <button class="tab-btn" onclick="switchTab('orders')">🧾 Orders</button>
+  <button class="tab-btn" onclick="switchTab('overview')">📊 Overview</button>
+</div>
+
+<!-- ═══ PRODUCTS TAB ═══ -->
+<div id="tab-products" class="tab-panel active">
+  <div class="search-bar">
+    <input type="text" id="search-input" placeholder="Search products…" />
+    <select id="cat-filter"><option value="">All Categories</option></select>
+    <button class="btn" onclick="loadProducts(1)">Search</button>
+  </div>
+  <div id="loading">Loading products…</div>
+  <div id="product-grid" class="product-grid"></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- ═══ ORDERS TAB ═══ -->
+<div id="tab-orders" class="tab-panel">
+  <div class="stats-grid" style="margin-bottom:1.25rem;">
+    <div class="stat-card purple"><div class="label">Total Orders</div><div class="value"><%= stats.total %></div></div>
+    <div class="stat-card green"><div class="label">Forwarded</div><div class="value"><%= stats.forwarded %></div></div>
+    <div class="stat-card red"><div class="label">Failed</div><div class="value"><%= stats.failed %></div></div>
+  </div>
+  <div class="table-wrap">
+    <% if (orders.length === 0) { %>
+      <div class="empty-state">🛒 No orders yet.<p>Orders placed in your LF stores will auto-forward to Rolemall and appear here.</p></div>
+    <% } else { %>
+    <table>
+      <thead>
+        <tr><th>LF Order</th><th>Customer</th><th>Total</th><th>Rolemall</th><th>Details</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+        <% orders.forEach(o => { %>
+        <tr>
+          <td><strong>#<%= o.lf_order_name || o.lf_order_id %></strong></td>
+          <td><%= o.customer || '—' %></td>
+          <td><%= o.total != null ? o.total : '—' %></td>
+          <td><span class="badge-status <%= o.rolemall_status %>"><span class="dot"></span><%= o.rolemall_status %></span></td>
+          <td style="font-size:0.72rem; color:var(--muted); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            <% if (o.rolemall_status === 'success' && o.rolemall_response) { %>
+              <span style="color:var(--success)"><%= JSON.stringify(o.rolemall_response).slice(0,70) %></span>
+            <% } else if (o.error) { %>
+              <span style="color:var(--danger)" title="<%= o.error %>"><%= o.error.slice(0,70) %></span>
+            <% } else { %>—<% } %>
+          </td>
+          <td style="color:var(--muted);font-size:0.72rem;"><%= new Date(o.received_at).toLocaleString() %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+
+<!-- ═══ OVERVIEW TAB ═══ -->
+<div id="tab-overview" class="tab-panel">
+  <div class="stats-grid">
+    <div class="stat-card teal"><div class="label">Connected Accounts</div><div class="value"><%= stats.accounts %></div></div>
+    <div class="stat-card purple"><div class="label">Total Orders</div><div class="value"><%= stats.total %></div></div>
+    <div class="stat-card green"><div class="label">Forwarded</div><div class="value"><%= stats.forwarded %></div></div>
+    <div class="stat-card red"><div class="label">Failed</div><div class="value"><%= stats.failed %></div></div>
+  </div>
+  <% if (accounts.length > 0) { %>
+  <div style="margin-bottom:1.5rem;">
+    <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;">Connected Accounts</div>
+    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;">
+      <% accounts.forEach(acc => { %>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.5rem 1rem;font-size:0.8rem;color:var(--muted);">
+          <span style="color:var(--accent2);font-weight:600;"><%= acc.id %></span>
+          &nbsp;·&nbsp; installed <%= new Date(acc.installed_at).toLocaleDateString() %>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+  <% } %>
+  <div style="color:var(--muted);font-size:0.75rem;">
+    Webhook: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;">POST <%= appUrl %>/webhooks/order-confirmed/:accountId</code>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let currentPage = 1;
+  let categories = [];
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['products','orders','overview'][i] === name));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + type;
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  async function loadCategories() {
+    try {
+      const res = await fetch('/api/categories');
+      const json = await res.json();
+      categories = Array.isArray(json.data) ? json.data : (json.data?.categories || []);
+      const sel = document.getElementById('cat-filter');
+      categories.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id || c.ID || c.category_id || c;
+        o.textContent = c.name || c.category_name || c;
+        sel.appendChild(o);
+      });
+    } catch(e) { console.warn('Categories load failed', e); }
+  }
+
+  async function loadProducts(page = 1) {
+    currentPage = page;
+    const search = document.getElementById('search-input').value.trim();
+    const category = document.getElementById('cat-filter').value;
+    const grid = document.getElementById('product-grid');
+    const loading = document.getElementById('loading');
+
+    grid.innerHTML = '';
+    loading.style.display = 'block';
+
+    try {
+      const params = new URLSearchParams({ page, limit: 20 });
+      if (search) params.set('search', search);
+      if (category) params.set('category', category);
+
+      const res = await fetch('/api/products?' + params);
+      const json = await res.json();
+      loading.style.display = 'none';
+
+      if (!json.ok) { grid.innerHTML = `<p style="color:var(--danger)">${json.error}</p>`; return; }
+
+      const products = Array.isArray(json.data) ? json.data
+        : (json.data?.products || json.data?.items || json.data?.results || []);
+
+      if (!products.length) {
+        grid.innerHTML = '<div class="empty-state">No products found.</div>';
+        renderPagination(page, false);
+        return;
+      }
+
+      products.forEach(p => grid.appendChild(renderProductCard(p)));
+      renderPagination(page, products.length === 20);
+    } catch(e) {
+      loading.style.display = 'none';
+      grid.innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
+    }
+  }
+
+  function renderProductCard(p) {
+    const id = p.id || p.ID || p.product_id || p.strung;
+    const name = p.name || p.title || p.product_name || 'Unnamed';
+    const price = p.price || p.sell_price || '—';
+    const img = p.image || p.thumbnail || (p.images && p.images[0]);
+
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.innerHTML = `
+      ${img ? `<img src="${img}" alt="${name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+               <div class="no-img" style="display:none">🖼️</div>`
+             : `<div class="no-img">🖼️</div>`}
+      <div class="info">
+        <div class="name" title="${name}">${name}</div>
+        <div class="price">${price} ${p.currency || ''}</div>
+        <div class="actions">
+          <button class="btn btn-sm btn-success" onclick="importProduct(${JSON.stringify(id)})">
+            ＋ Import to LF
+          </button>
+          <button class="btn btn-sm btn-outline" onclick="viewProduct(${JSON.stringify(id)}, ${JSON.stringify(p.strung || null)})">
+            Details
+          </button>
+        </div>
+      </div>`;
+    return card;
+  }
+
+  function renderPagination(page, hasMore) {
+    const el = document.getElementById('pagination');
+    el.innerHTML = `
+      <button class="btn btn-outline btn-sm" onclick="loadProducts(${page-1})" ${page<=1?'disabled':''}>← Prev</button>
+      <span class="page-info">Page ${page}</span>
+      <button class="btn btn-outline btn-sm" onclick="loadProducts(${page+1})" ${!hasMore?'disabled':''}>Next →</button>`;
+  }
+
+  async function importProduct(productId) {
+    showToast('Importing product…');
+    try {
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: String(productId) })
+      });
+      const json = await res.json();
+      if (json.ok) {
+        showToast(`✅ "${json.data?.title}" imported to LF!`, 'success');
+      } else {
+        showToast('❌ ' + json.error, 'error');
+      }
+    } catch(e) {
+      showToast('❌ ' + e.message, 'error');
+    }
+  }
+
+  async function viewProduct(productId, strung) {
+    try {
+      const params = new URLSearchParams();
+      if (productId) params.set('product_id', productId);
+      if (strung) params.set('strung', strung);
+      const res = await fetch('/api/product-details?' + params);
+      const json = await res.json();
+      if (json.ok) {
+        alert(JSON.stringify(json.data, null, 2));
+      } else {
+        showToast('❌ ' + json.error, 'error');
+      }
+    } catch(e) { showToast('❌ ' + e.message, 'error'); }
+  }
+
+  document.getElementById('search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadProducts(1);
+  });
+
+  loadCategories();
+  loadProducts(1);
+</script>
+</body>
+</html>
