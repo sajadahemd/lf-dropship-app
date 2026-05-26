@@ -82,115 +82,17 @@ async function getAccountInfo(accessToken) {
   return graphql(accessToken, query);
 }
 
-// One-time schema introspection cache
-let _schemaCache = null;
-
-async function introspectImageMutations(accessToken) {
-  if (_schemaCache) return _schemaCache;
-
-  const query = `
-    query {
-      __schema {
-        mutationType {
-          fields {
-            name
-            args { name type { name kind ofType { name kind } } }
-          }
-        }
-        types {
-          name
-          kind
-          inputFields { name type { name kind ofType { name kind } } }
-        }
-      }
-    }
-  `;
-
-  try {
-    const data = await graphql(accessToken, query);
-    const mutations = data.__schema.mutationType.fields;
-    const types = data.__schema.types;
-
-    const imageMutations = mutations.filter(m =>
-      /image|media|file|upload|asset/i.test(m.name)
-    );
-    const imageInputs = types.filter(t =>
-      t.kind === 'INPUT_OBJECT' && /image|media|file|upload|asset/i.test(t.name)
-    );
-
-    console.log('[LF Schema] Candidate image mutations:',
-      imageMutations.map(m => ({
-        name: m.name,
-        args: m.args.map(a => `${a.name}: ${a.type.name || a.type.ofType?.name || a.type.kind}`)
-      }))
-    );
-    console.log('[LF Schema] Candidate image input types:',
-      imageInputs.map(t => ({
-        name: t.name,
-        fields: t.inputFields?.map(f => `${f.name}: ${f.type.name || f.type.ofType?.name || f.type.kind}`)
-      }))
-    );
-
-    _schemaCache = { mutations: imageMutations, inputs: imageInputs };
-    return _schemaCache;
-  } catch (err) {
-    console.warn('[LF Schema] Introspection failed:', err.message);
-    return null;
-  }
-}
-
 /**
- * Upload a single image URL to LF and return its integer ID.
- * Uses introspection on first call to discover the correct mutation name
- * and input field, then reuses that for subsequent calls.
+ * Image-upload status:
+ *   LF's GraphQL exposes InputProduct.images as [ID!] — pre-existing image IDs.
+ *   Their developer docs (https://developer.lightfunnels.com/) do not publish
+ *   a public mutation or REST endpoint to upload an image and obtain that ID.
+ *   Schema introspection is blocked on api.lightfunnels.com.
+ *
+ *   Until LF support confirms the correct upload endpoint, we skip image
+ *   uploads entirely so product creation succeeds. Images need to be uploaded
+ *   manually inside LF admin, or via a custom endpoint we obtain from LF.
  */
-async function uploadImageToLF(accessToken, imageUrl) {
-  // Discover the schema once
-  const schema = await introspectImageMutations(accessToken);
-
-  if (!schema || schema.mutations.length === 0) {
-    console.warn('[LF] No image mutations found via introspection for:', imageUrl);
-    return null;
-  }
-
-  // Try each discovered mutation with its actual input type & field name
-  for (const m of schema.mutations) {
-    const arg = m.args[0];
-    if (!arg) continue;
-    const inputTypeName = arg.type.name || arg.type.ofType?.name;
-    if (!inputTypeName) continue;
-
-    const inputDef = schema.inputs.find(i => i.name === inputTypeName);
-    // Pick the first field that looks like it accepts a URL
-    const urlField = inputDef?.inputFields?.find(f =>
-      /src|url|source|link|href/i.test(f.name)
-    );
-    const fieldName = urlField?.name || 'src';
-
-    const query = `
-      mutation Upload($node: ${inputTypeName}!) {
-        ${m.name}(${arg.name}: $node) {
-          _id
-        }
-      }
-    `;
-
-    try {
-      const data = await graphql(accessToken, query, {
-        node: { [fieldName]: imageUrl },
-      });
-      const id = data?.[m.name]?._id;
-      if (id != null) {
-        console.log(`[LF] Uploaded image via ${m.name}({${fieldName}}), id:`, id);
-        return parseInt(id, 10);
-      }
-    } catch (err) {
-      console.warn(`[LF] ${m.name} failed:`, err.message.slice(0, 200));
-    }
-  }
-
-  return null;
-}
 
 /**
  * Import a Rolemall product into a Lightfunnels store.
@@ -214,15 +116,15 @@ async function importProduct(accessToken, rmProduct) {
     ? [rmProduct.img]
     : [];
 
-  // Upload each image to LF first; images field requires [Int] (image IDs).
-  // If all uploads fail, create the product without images rather than failing.
-  let images = [];
+  // LF's InputProduct.images expects [ID!] of pre-uploaded images.
+  // No public upload mechanism is documented — see note above. Skip for now.
+  const images = [];
   if (rawImageUrls.length > 0) {
-    const uploadResults = await Promise.all(
-      rawImageUrls.slice(0, 5).map(url => uploadImageToLF(accessToken, url))
+    console.log(
+      `[LF] Skipping ${rawImageUrls.length} Rolemall image URL(s) — ` +
+      `LF requires pre-existing image IDs and exposes no public upload endpoint. ` +
+      `Pending LF support confirmation.`
     );
-    images = uploadResults.filter(id => Number.isInteger(id));
-    console.log(`[LF] Attaching ${images.length}/${rawImageUrls.length} uploaded image IDs`);
   }
 
   const mutation = `
