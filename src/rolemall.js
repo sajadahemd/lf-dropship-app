@@ -23,10 +23,19 @@ async function fetchProducts({ page = 1, limit = 20, category = null, search = n
   return response.data;
 }
 
+function buildStrung(product_id) {
+  return `${getToken()}gootquality${product_id}`;
+}
+
 async function fetchProductDetails({ strung = null, product_id = null } = {}) {
   const params = {};
-  if (strung) params.strung = strung;
-  if (product_id) params.product_id = product_id;
+  if (strung) {
+    params.strung = strung;
+  } else if (product_id) {
+    params.strung = buildStrung(product_id);
+  } else {
+    throw new Error('product_id or strung required');
+  }
   const response = await axios.get(`${ROLEMALL_BASE}/product-details`, { params });
   return response.data;
 }
@@ -119,4 +128,4 @@ async function submitOrder(lfOrderPayload) {
   return { body, response: response.data };
 }
 
-module.exports = { submitOrder, mapOrderToRolemall, fetchCategories, fetchProducts, fetchProductDetails };
+module.exports = { submitOrder, mapOrderToRolemall, fetchCategories, fetchProducts, fetchProductDetails, buildStrung };

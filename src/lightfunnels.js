@@ -99,11 +99,12 @@ async function getAccountInfo(accessToken) {
  * rmProduct shape: { name, description, price, images: [{url}], id, strung }
  */
 async function importProduct(accessToken, rmProduct) {
-  const slug = (rmProduct.name || rmProduct.title || `product-${rmProduct.id}`)
+  const productId = rmProduct.item_id || rmProduct._id || rmProduct.id;
+  const slug = (rmProduct.name || rmProduct.title || `product-${productId}`)
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^a-z0-9\u0600-\u06ff]+/g, '-')
     .replace(/(^-|-$)/g, '')
-    .substring(0, 60);
+    .substring(0, 60) || `rm-product-${productId}`;
 
   const mutation = `
     mutation CreateProduct($node: InputProduct!) {
@@ -123,7 +124,7 @@ async function importProduct(accessToken, rmProduct) {
     title: rmProduct.name || rmProduct.title || 'Imported Product',
     description: rmProduct.description || '',
     price,
-    sku: `RM:${rmProduct.id}`,
+    sku: `RM:${productId}`,
     slug: `${slug}-${Date.now()}`,
     product_type: 'physical_product',
   };

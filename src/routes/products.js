@@ -57,10 +57,11 @@ router.post('/import', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'product_id or strung required' });
     }
 
-    const rmProduct = await fetchProductDetails({ product_id, strung });
+    const detailsResponse = await fetchProductDetails({ product_id, strung });
+    const rmProduct = detailsResponse.data || detailsResponse;
     const result = await importProduct(accessToken, rmProduct);
 
-    res.json({ ok: true, data: result.createProduct });
+    res.json({ ok: true, data: result?.data?.createProduct || result });
   } catch (err) {
     console.error('[Import] Error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
