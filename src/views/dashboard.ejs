@@ -239,7 +239,8 @@
       if (!json.ok) { grid.innerHTML = `<p style="color:var(--danger)">${json.error}</p>`; return; }
 
       const products = Array.isArray(json.data) ? json.data
-        : (json.data?.products || json.data?.items || json.data?.results || []);
+        : (json.data?.products || json.data?.items || json.data?.results
+          || json.data?.data?.products || json.data?.data?.items || []);
 
       if (!products.length) {
         grid.innerHTML = '<div class="empty-state">No products found.</div>';
@@ -247,8 +248,9 @@
         return;
       }
 
+      const totalPages = json.data?.data?.pages || json.data?.pages || 999;
       products.forEach(p => grid.appendChild(renderProductCard(p)));
-      renderPagination(page, products.length === 20);
+      renderPagination(page, page < totalPages);
     } catch(e) {
       loading.style.display = 'none';
       grid.innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
@@ -256,10 +258,10 @@
   }
 
   function renderProductCard(p) {
-    const id = p.id || p.ID || p.product_id || p.strung;
+    const id = p._id || p.id || p.ID || p.product_id;
     const name = p.name || p.title || p.product_name || 'Unnamed';
-    const price = p.price || p.sell_price || '—';
-    const img = p.image || p.thumbnail || (p.images && p.images[0]);
+    const price = p.price ? p.price.toLocaleString() + ' IQD' : '—';
+    const img = (Array.isArray(p.img) ? p.img[0] : p.img) || p.image || p.thumbnail || (p.images && p.images[0]);
 
     const card = document.createElement('div');
     card.className = 'product-card';
