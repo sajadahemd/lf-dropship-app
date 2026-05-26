@@ -329,11 +329,11 @@
         <div class="price">${price} ${p.currency || ''}</div>
         <div class="actions">
           <button class="btn btn-sm ${alreadyImported ? 'btn-outline' : 'btn-success'}"
-                  onclick="importProduct(${JSON.stringify(id)})"
+                  onclick="importProduct('${id}')"
                   ${alreadyImported ? 'title="Already imported — click to re-import"' : ''}>
             ${alreadyImported ? '↻ Re-import' : '＋ Import to LF'}
           </button>
-          <button class="btn btn-sm btn-outline" onclick="viewProduct(${JSON.stringify(id)}, ${JSON.stringify(p.strung || null)})">
+          <button class="btn btn-sm btn-outline" onclick="viewProduct('${id}', ${p.strung ? `'${p.strung}'` : 'null'})">
             Details
           </button>
         </div>
