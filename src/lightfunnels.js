@@ -158,10 +158,6 @@ async function importProduct(accessToken, rmProduct) {
         _id
         title
         price
-        images {
-          id
-          src
-        }
       }
     }
   `;
